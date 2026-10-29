@@ -4,9 +4,9 @@ from fastapi import FastAPI, Request, Response
 
 app = FastAPI()
 
-# Meta credentials from environment variables (or paste direct strings for testing)
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "YOUR_META_ACCESS_TOKEN")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "YOUR_PHONE_NUMBER_ID")
+# Meta credentials from environment variables
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "travel_bot_token_123")
 
 @app.get("/")
@@ -26,6 +26,7 @@ def verify_webhook(request: Request):
 @app.post("/webhook")
 async def receive_message(request: Request):
     body = await request.json()
+    print("Incoming Webhook Payload:", body)
     
     try:
         entry = body.get("entry", [])[0]
@@ -37,6 +38,8 @@ async def receive_message(request: Request):
             incoming_msg = messages[0]
             from_number = incoming_msg.get("from")
             msg_body = incoming_msg.get("text", {}).get("body", "")
+
+            print(f"Parsed sender phone: {from_number} | Message: {msg_body}")
 
             # Send automated WhatsApp reply back
             reply_text = f"Hello! Welcome to our Travel Agency. We received your request: '{msg_body}'. How can we help with your flight booking today?"
@@ -51,6 +54,8 @@ def send_whatsapp_message(recipient_id: str, text: str):
     # Ensure recipient_id contains only digits and no leading '+' or spaces
     clean_recipient = "".join(filter(str.isdigit, str(recipient_id)))
 
+    print(f"Sending to clean recipient: {clean_recipient} | Using Phone ID: {PHONE_NUMBER_ID}")
+
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
@@ -64,4 +69,5 @@ def send_whatsapp_message(recipient_id: str, text: str):
     }
     
     response = requests.post(url, json=payload, headers=headers)
-    print("Meta API Response:", response.json())
+    print("Meta API Status Code:", response.status_code)
+    print("Meta API Response Body:", response.json())
