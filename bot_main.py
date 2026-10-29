@@ -48,6 +48,9 @@ async def receive_message(request: Request):
     return {"status": "success"}
 
 def send_whatsapp_message(recipient_id: str, text: str):
+    # Ensure recipient_id contains only digits and no leading '+' or spaces
+    clean_recipient = "".join(filter(str.isdigit, str(recipient_id)))
+
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
@@ -55,9 +58,10 @@ def send_whatsapp_message(recipient_id: str, text: str):
     }
     payload = {
         "messaging_product": "whatsapp",
-        "to": recipient_id,
+        "to": clean_recipient,
         "type": "text",
         "text": {"body": text}
     }
+    
     response = requests.post(url, json=payload, headers=headers)
     print("Meta API Response:", response.json())
