@@ -50,8 +50,34 @@ async def receive_message(request: Request):
 
     return {"status": "success"}
 
+@app.get("/test-send")
+def test_outbound_message(phone: str):
+    """
+    Diagnostic endpoint to test outbound Meta API messaging directly.
+    Visit in browser: https://<your-render-url>/test-send?phone=923001234567
+    """
+    clean_recipient = "".join(filter(str.isdigit, str(phone)))
+    print(f"Manual Test Send to recipient: {clean_recipient} | Using Phone ID: {PHONE_NUMBER_ID}")
+
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": clean_recipient,
+        "type": "text",
+        "text": {"body": "Direct manual test message from your Render FastAPI bot!"}
+    }
+    
+    response = requests.post(url, json=payload, headers=headers)
+    return {
+        "status_code": response.status_code,
+        "meta_response": response.json()
+    }
+
 def send_whatsapp_message(recipient_id: str, text: str):
-    # Ensure recipient_id contains only digits and no leading '+' or spaces
     clean_recipient = "".join(filter(str.isdigit, str(recipient_id)))
 
     print(f"Sending to clean recipient: {clean_recipient} | Using Phone ID: {PHONE_NUMBER_ID}")
