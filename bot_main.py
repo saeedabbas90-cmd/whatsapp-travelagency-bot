@@ -26,27 +26,30 @@ def verify_webhook(request: Request):
 @app.post("/webhook")
 async def receive_message(request: Request):
     body = await request.json()
-    print("Incoming Webhook Payload:", body)
+    print("RAW WEBHOOK RECEIVED:", body)
     
     try:
         entry = body.get("entry", [])[0]
         changes = entry.get("changes", [])[0]
         value = changes.get("value", {})
+        
+        # Check if messages exist in the payload
         messages = value.get("messages", [])
-
         if messages:
             incoming_msg = messages[0]
             from_number = incoming_msg.get("from")
             msg_body = incoming_msg.get("text", {}).get("body", "")
 
-            print(f"Parsed sender phone: {from_number} | Message: {msg_body}")
+            print(f"SUCCESS! Parsed sender phone: {from_number} | Message: {msg_body}")
 
             # Send automated WhatsApp reply back
             reply_text = f"Hello! Welcome to our Travel Agency. We received your request: '{msg_body}'. How can we help with your flight booking today?"
             send_whatsapp_message(from_number, reply_text)
+        else:
+            print("Webhook received, but no 'messages' field found (could be a delivery/read status update).")
 
     except Exception as e:
-        print("Error processing webhook:", e)
+        print("Error processing webhook payload:", e)
 
     return {"status": "success"}
 
