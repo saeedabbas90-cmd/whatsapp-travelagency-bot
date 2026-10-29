@@ -1,7 +1,13 @@
-from fastapi import FastAPI, Request, Response
 import os
+import requests
+from fastapi import FastAPI, Request, Response
 
 app = FastAPI()
+
+# Meta credentials from environment variables (or paste direct strings for testing)
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "YOUR_META_ACCESS_TOKEN")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "YOUR_PHONE_NUMBER_ID")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "travel_bot_token_123")
 
 @app.get("/")
 def home():
@@ -9,13 +15,9 @@ def home():
 
 @app.get("/webhook")
 def verify_webhook(request: Request):
-    # Meta WhatsApp verification token handshake
     hub_mode = request.query_params.get("hub.mode")
     hub_challenge = request.query_params.get("hub.challenge")
     hub_verify_token = request.query_params.get("hub.verify_token")
-    
-    # Set your own verify token here or use an environment variable
-    VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "travel_bot_token_123")
     
     if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
         return Response(content=hub_challenge, media_type="text/plain")
@@ -24,6 +26,38 @@ def verify_webhook(request: Request):
 @app.post("/webhook")
 async def receive_message(request: Request):
     body = await request.json()
-    # Add your WhatsApp incoming message parsing logic here
-    print("Received webhook message:", body)
+    
+    try:
+        entry = body.get("entry", [])[0]
+        changes = entry.get("changes", [])[0]
+        value = changes.get("value", {})
+        messages = value.get("messages", [])
+
+        if messages:
+            incoming_msg = messages[0]
+            from_number = incoming_msg.get("from")
+            msg_body = incoming_msg.get("text", {}).get("body", "")
+
+            # Send automated WhatsApp reply back
+            reply_text = f"Hello! Welcome to our Travel Agency. We received your request: '{msg_body}'. How can we help with your flight booking today?"
+            send_whatsapp_message(from_number, reply_text)
+
+    except Exception as e:
+        print("Error processing webhook:", e)
+
     return {"status": "success"}
+
+def send_whatsapp_message(recipient_id: str, text: str):
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": recipient_id,
+        "type": "text",
+        "text": {"body": text}
+    }
+    response = requests.post(url, json=payload, headers=headers)
+    print("Meta API Response:", response.json())
