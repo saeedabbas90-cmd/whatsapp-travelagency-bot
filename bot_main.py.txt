@@ -1,0 +1,102 @@
+import os
+import requests
+from fastapi import FastAPI, Request, HTTPException, Query
+from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Load environment variables (for local testing with .env file)
+load_dotenv()
+
+app = FastAPI(title="Travel Agency AI Bot", version="1.0")
+
+# Meta WhatsApp API Credentials (configure these in your environment variables)
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "my_secure_travel_token_123")
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "your_meta_permanent_access_token")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "your_whatsapp_phone_number_id")
+ADMIN_PHONE = os.getenv("ADMIN_PHONE", "923001234567") # Your personal phone for admin alerts
+
+@app.get("/")
+def home():
+    return {"status": "Travel Agency AI Bot is running smoothly! ✈️"}
+
+# ==========================================
+# 1. META WEBHOOK VERIFICATION (GET)
+# ==========================================
+@app.get("/webhook")
+async def verify_webhook(
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
+    hub_challenge: str = Query(None, alias="hub.challenge")
+):
+    """
+    Meta calls this endpoint to verify your webhook URL during setup.
+    """
+    if hub_mode and hub_verify_token:
+        if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
+            print("WEBHOOK_VERIFIED: Successfully verified webhook with Meta.")
+            return int(hub_challenge)
+        else:
+            raise HTTPException(status_code=403, detail="Verification token mismatch")
+    raise HTTPException(status_code=400, detail="Invalid verification request")
+
+# ==========================================
+# 2. INCOMING WHATSAPP MESSAGE HANDLER (POST)
+# ==========================================
+@app.post("/webhook")
+async def receive_whatsapp_message(request: Request):
+    """
+    Receives incoming messages, documents (passports), and queries from clients.
+    """
+    body = await request.json()
+    
+    try:
+        # Extract incoming message structure from Meta payload
+        entry = body.get("entry", [{}])[0]
+        change = entry.get("changes", [{}])[0]
+        value = change.get("value", {})
+        messages = value.get("messages")
+        
+        if messages:
+            message = messages[0]
+            sender_phone = message.get("from") # Client's WhatsApp number
+            msg_type = message.get("type")
+            
+            print(f"Incoming message type: {msg_type} from {sender_phone}")
+            
+            if msg_type == "text":
+                message_text = message.get("text", {}).get("body", "")
+                print(f"Client Text: {message_text}")
+                # TODO: Pass text to query engine (flight search / visa info)
+                
+            elif msg_type == "image":
+                image_id = message.get("image", {}).get("id")
+                print(f"Received Passport/Image ID: {image_id}")
+                # TODO: Trigger OCR extraction for passport intake
+                
+        return {"status": "EVENT_RECEIVED"}
+        
+    except Exception as e:
+        print(f"Error processing webhook payload: {e}")
+        return {"status": "error", "message": str(e)}
+
+# ==========================================
+# 3. ADMIN NOTIFICATION HELPER
+# ==========================================
+def send_admin_alert(alert_message: str):
+    """
+    Sends real-time logs or quote details to your personal WhatsApp number.
+    """
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": ADMIN_PHONE,
+        "type": "text",
+        "text": {"body": f"🔔 **ADMIN ALERT**\n\n{alert_message}"}
+    }
+    
+    response = requests.post(url, json=payload, headers=headers)
+    return response.json()
